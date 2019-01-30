@@ -1,0 +1,30 @@
+{
+  "name": "lameboy",
+  "version": "0.0.1",
+  "description": "AWS Lambda functions Deployment Interactive Tool. So very beta (╯°□°）╯︵ ┻━┻",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "lambda",
+    "aws",
+    "deploy",
+    "cloud-function",
+    "lambda-deploy"
+  ],
+  "author": "Divyansh Singh",
+  "license": "MIT",
+  "dependencies": {
+    "aws-sdk": "^2.393.0",
+    "zip-a-folder": "0.0.7"
+  },
+  "bin": {
+    "lame": "./index.js",
+    "lameboy": "./index.js"
+  },
+  "repository": {
+    "type" : "git",
+    "url" : "https://github.com/vipu1212/Lameboy"
+  }
+}
