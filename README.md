@@ -11,7 +11,7 @@
 ## Installation
 
 ```sh
-$ npm i lameboy-beta --global
+$ npm i lameboy --global
 ```
 
 ## Usage
