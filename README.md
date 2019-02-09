@@ -74,4 +74,4 @@ $ lame reset
  - Fix resizing issue
 
 ###  License
- [MIT](https://github.com/IQAndreas/markdown-licenses/blob/master/mit.md)
+ [MIT](https://docs.google.com/document/d/10n3vM5AxxCOSr2YkNWSSWKdzxEKtJ-rdijLQNGOwnZA/edit?usp=sharing)
