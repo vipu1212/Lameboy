@@ -70,6 +70,7 @@ $ lame reset
  - Upcoming issues
 
 ### TODO
+ - Create Alias option on first deploy
  - Allow editing default init values globally
  - Fix resizing issue
 

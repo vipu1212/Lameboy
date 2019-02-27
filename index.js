@@ -135,6 +135,10 @@ function deploy() {
                 return Promise.reject('Invalid Directory');
             } else {
 
+                if (path === './') {
+                    path = require('child_process').execSync('pwd').toString().trim();
+                }
+
                 // If Lambda folder
                 const isLambdaPath = fs.readdirSync(path).indexOf(_k.LAME_CONFIG_FILE_NAME) >= 0;
 
@@ -144,12 +148,15 @@ function deploy() {
                 // After -> session[deploy][path] = /path/to/lambda and lambdaNmae = lambda_name
 
                 if (isLambdaPath) {
+
                     const dirs = path.split('/');
-                    const lambdas = [dirs[dirs.length - 1]];
+                    const lambda = dirs[dirs.length - 1];
                     dirs.splice(dirs.length - 1, 1);
                     const dirPath = dirs.join('/');
+
                     session[SESSION_TYPE.DEPLOY].path = dirPath;
-                    return Promise.resolve(lambdas);
+                    return Promise.resolve([lambda]);
+
                 } else {
                     session[SESSION_TYPE.DEPLOY].path = path.replace(/\/$/, '');
                     const entries = fs.readdirSync(path).filter(entry => {
@@ -249,7 +256,10 @@ function setupAWS() {
         getRoleID.then(role => {
                 fs.writeFileSync(CERT_PATH, JSON.stringify(session[SESSION_TYPE.SETUP]));
                 fs.writeFileSync(LAME_CONF_PATH, JSON.stringify({Role: role}));
-                fs.mkdirSync(__dirname+'/tmp');
+
+                if (!fs.existsSync(`${__dirname}/tmp`))
+                    fs.mkdirSync(`${__dirname}/tmp`);
+
                 _k.LAME_DEFAULT_CONFIG.Role = role;
                 resolve();
             })
