@@ -1,0 +1,8 @@
+
+Commands                Description
+
+--reset                 Resets the config. You'll have to put AWS configs again.
+
+--version, -v           Displays current version of lameboy
+
+--help, -h              Display help

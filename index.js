@@ -2,10 +2,11 @@
 
 const fs = require('fs');
 const _clid = require('./ui/clid');
+const _config = require('./lib/config');
 const _k = require('./values/constants');
 const _deployer = require('./lib/deployer');
+const child_process = require('child_process');
 const CERT_PATH = __dirname + '/values/aws.json';
-const LAME_CONF_PATH = __dirname + '/values/lame.conf.json';
 
 const SESSION_TYPE = {
     NONE: 0,
@@ -28,33 +29,82 @@ const session = {
     }
 }
 
+let isFirstRun = false;
+
 main();
 
+/**
+ * Entry point for program.
+ * Initializes Lambda Options
+ * Prints banner
+ * Handles Session
+ */
 function main() {
-    handleArgs();
+    const continueExec = handleArgs();
+
+    if (!continueExec) {
+        stopExec();
+        return;
+    }
+
     initValues();
     printBanner();
     startSession().then(() => {
-        process.exit(0);
+        stopExec();
     }).catch(e => {
         console.log(`Error: ${e}`);
         process.exit(-1);
     })
 }
 
-function handleArgs() {
-    const args = process.argv;
-    if (args.length > 2 && args[2].toLowerCase() === _k.RESET.toLowerCase()) {
-        fs.unlinkSync(CERT_PATH);
-    }
-}
-
-function initValues() {
-    _k.LAME_DEFAULT_CONFIG.Role = JSON.parse(fs.readFileSync(LAME_CONF_PATH).toString()).Role;
+/**
+ * Stop program
+ */
+function stopExec() {
+    process.exit(0);
 }
 
 /**
- * @desc Handled all session types
+ * Handles arguments provided while starting the application
+ */
+function handleArgs() {
+    const args = process.argv;
+    let continueExec = true;
+
+    if (args.length > 2) {
+        switch (args[2].toLowerCase()) {
+
+            case _k.RESET:
+            case _k.RESET_CMD:
+                if (fs.existsSync(CERT_PATH))
+                    fs.unlinkSync(CERT_PATH);
+                _config.reset();
+                break;
+
+            case _k.VERSION_CMD:
+            case _k.VERSION_CMD_SHORT:
+                const version = JSON.parse(fs.readFileSync('./package.json').toString()).version;
+                _clid.colorLog(`Version ${version}`, _clid.COLORS.BOLD);
+                continueExec = false;
+                break;
+
+            case _k.HELP_CMD:
+            case _k.HELP_CMD_SHORT:
+            default:
+                _clid.colorLog(fs.readFileSync('./HELP.txt'));
+                continueExec = false;
+        }
+    }
+    return continueExec;
+}
+
+function initValues() {
+    _k.LAME_DEFAULT_CONFIG.Role = _config.get('Role');
+
+}
+
+/**
+ * Handled all session types
  */
 function startSession() {
 
@@ -64,7 +114,12 @@ function startSession() {
 
     options = alreadySetup ? [_k.INIT, _k.DEPLOY] : [_k.SETUP_AWS];
 
-    const getSessionType = _clid.createRadioButton('What\'s up?', options);
+    let strSessionQ = 'What\'s up?';
+
+    if (isFirstRun)
+        strSessionQ = strSessionQ.concat('(Use space to select option and enter to submit)');
+
+    const getSessionType = _clid.createRadioButton(strSessionQ, options);
 
     const handleSession = getSessionType.then(response => {
 
@@ -93,8 +148,8 @@ function startSession() {
 }
 
 /**
- * @desc Creates lame.json file in given path with default config.
- *       If path not present, then ask for the path input
+ * Creates lame.json file in given path with default config.
+ * If path not present, then ask for the path input
  *
  * @param {string} path Lambda folder path to initialize
  */
@@ -113,7 +168,7 @@ function initLambda(path) {
 }
 
 /**
- * @desc Deploys Lambda functions
+ * Deploys Lambda functions
  */
 function deploy() {
     return new Promise((resolve, reject) => {
@@ -121,12 +176,22 @@ function deploy() {
         let paths;
 
         // Ask for the path
-        const getPath = _clid.ask('\nEnter Lambda(s) path');
+        const lastPath = _config.get(_k.LAST_DEOPLOYMENT_PATH);
+
+        let strPathQ = `\nEnter Lambda(s) paths`;
+
+        if (lastPath)
+            strPathQ = strPathQ.concat(` OR hit just enter to use ${lastPath}`);
+
+        const getPath = _clid.ask(strPathQ);
 
         // If path is of lambda then use it or list sub-directories which are lambdas
         const getLambdas = getPath.then(path => {
 
             path = path.trim();
+
+            if (path === '' && lastPath)
+                path = lastPath;
 
             const isDirectory = fs.lstatSync(path).isDirectory();
 
@@ -136,7 +201,7 @@ function deploy() {
             } else {
 
                 if (path === './') {
-                    path = require('child_process').execSync('pwd').toString().trim();
+                    path = child_process.execSync('pwd').toString().trim();
                 }
 
                 // If Lambda folder
@@ -178,6 +243,10 @@ function deploy() {
             if (!lambdas || lambdas.length === 0) {
                 return Promise.reject();
             }
+
+            _config.upsert({
+                [_k.LAST_DEOPLOYMENT_PATH]: session[SESSION_TYPE.DEPLOY].path
+            });
 
             paths = lambdas.map(lambda => {
                 return session[SESSION_TYPE.DEPLOY].path + '/' + lambda
@@ -221,7 +290,9 @@ function handleDeployementError(e) {
     return deploy();
 }
 
-
+/**
+ * @desc Asks user to input required AWS creds and default Role
+ */
 function setupAWS() {
     return new Promise((resolve, reject) => {
 
@@ -254,13 +325,18 @@ function setupAWS() {
         });
 
         getRoleID.then(role => {
+
                 fs.writeFileSync(CERT_PATH, JSON.stringify(session[SESSION_TYPE.SETUP]));
-                fs.writeFileSync(LAME_CONF_PATH, JSON.stringify({Role: role}));
+
+                _config.upsert({
+                    Role: role
+                });
 
                 if (!fs.existsSync(`${__dirname}/tmp`))
                     fs.mkdirSync(`${__dirname}/tmp`);
 
                 _k.LAME_DEFAULT_CONFIG.Role = role;
+                isFirstRun = true;
                 resolve();
             })
             .catch(e => {
