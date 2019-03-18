@@ -105,10 +105,14 @@ function createButtons(title, list, ui_options, callback, isSingleSelection) {
 function createListOptions(list, ui_options, callback, isSingleSelection) {
     return new Promise((resolve, reject) => {
 
-        const colorSelected = ui_options.colorSelected || _colors.FG_GREEN;
-        const colorUnselected = ui_options.colorUnselected || _colors.FG_RED;
-        const symbolSeleted = ui_options.symbolSeleted || '◉';
-        const symbolUnselected = ui_options.symbolUnselected || '◯';
+        ui_options.colorSelected = ui_options.colorSelected || _colors.FG_GREEN;
+        ui_options.colorUnselected = ui_options.colorUnselected || _colors.FG_RED;
+        ui_options.symbolSeleted = ui_options.symbolSeleted || '◉';
+        ui_options.symbolUnselected = ui_options.symbolUnselected || '◯';
+
+        const {
+            symbolSeleted, symbolUnselected, colorSelected, colorUnselected
+        } = ui_options;
 
         // Add each list option to array of objects with selected value
         let selections = list.map(element => {
@@ -136,55 +140,25 @@ function createListOptions(list, ui_options, callback, isSingleSelection) {
                     }
                     cursorPosition--;
                     rl.moveCursor(process.stdout, 0, -1);
+
+                    if (isSingleSelection)
+                        select(selections, cursorPosition, isSingleSelection, ui_options);
                     break;
 
                 case 'down':
-
-                    // console.log(`\n\n\nC: ${cursorPosition} || ${selections}`);
 
                     if (cursorPosition >= selections.length - 1) {
                         break;
                     }
                     cursorPosition++;
                     rl.moveCursor(process.stdout, 0, 1);
+
+                    if (isSingleSelection)
+                        select(selections, cursorPosition, isSingleSelection, ui_options);
                     break;
 
                 case 'space':
-
-                    const option = selections[cursorPosition];
-
-                    // Sanity check
-                    if (cursorPosition < 0 || cursorPosition >= selections.length) {
-                        rl.cursorTo(process.stdout, 0, null);
-                        return
-                    }
-
-                    if (isSingleSelection) {
-                        // Reset last option
-                        if (lastSelectedPosition !== undefined) {
-                            selections[lastSelectedPosition].selected = false;
-                            rl.moveCursor(process.stdout, -10, lastSelectedPosition - cursorPosition);
-                            rl.clearLine(process.stdout, -10);
-                            colorWrite(`${symbolUnselected} ${selections[lastSelectedPosition].value}`, colorUnselected);
-                            rl.moveCursor(process.stdout, -10, cursorPosition - lastSelectedPosition);
-                        }
-                    }
-
-                    lastSelectedPosition = cursorPosition;
-
-                    selections[cursorPosition].selected = !option.selected;
-
-                    rl.clearLine(process.stdout, 0);
-                    rl.moveCursor(process.stdout, -(option.value.length + 10), 0);
-
-                    if (option.selected) {
-                        colorWrite(`${symbolSeleted} ${option.value}`, colorSelected);
-                    } else {
-                        colorWrite(`${symbolUnselected} ${option.value}`, colorUnselected);
-                    }
-
-                    // Move cursor to start of the line
-                    rl.moveCursor(process.stdout, -(option.value.length + 10), 0);
+                    select(selections, cursorPosition, isSingleSelection, ui_options);
                     break;
 
                 case 'enter':
@@ -212,7 +186,7 @@ function createListOptions(list, ui_options, callback, isSingleSelection) {
                         }
                     } else {
                         result = [];
-                        selections.forEach((e,i) => {
+                        selections.forEach((e, i) => {
                             if (e.selected)
                                 result.push({
                                     value: e.value,
@@ -242,6 +216,51 @@ function createListOptions(list, ui_options, callback, isSingleSelection) {
         process.stdin.on('keypress', listener);
     });
 }
+
+function select(selections, cursorPosition, isSingleSelection, ui_options) {
+
+    const {
+        symbolSeleted, symbolUnselected, colorSelected, colorUnselected
+    } = ui_options;
+
+    const option = selections[cursorPosition];
+
+    // Sanity check
+    if (cursorPosition < 0 || cursorPosition >= selections.length) {
+        rl.cursorTo(process.stdout, 0, null);
+        return
+    }
+
+    if (isSingleSelection) {
+        // Reset last option
+        if (lastSelectedPosition !== undefined) {
+            selections[lastSelectedPosition].selected = false;
+            rl.moveCursor(process.stdout, -10, lastSelectedPosition - cursorPosition);
+            rl.clearLine(process.stdout, -10);
+            colorWrite(`${symbolUnselected} ${selections[lastSelectedPosition].value}`, colorUnselected);
+            rl.moveCursor(process.stdout, -10, cursorPosition - lastSelectedPosition);
+        }
+    }
+
+    lastSelectedPosition = cursorPosition;
+
+    selections[cursorPosition].selected = !option.selected;
+
+    rl.clearLine(process.stdout, 0);
+    rl.moveCursor(process.stdout, -(option.value.length + 10), 0);
+
+    if (option.selected) {
+        colorWrite(`${symbolSeleted} ${option.value}`, colorSelected);
+    } else {
+        colorWrite(`${symbolUnselected} ${option.value}`, colorUnselected);
+    }
+
+    // Move cursor to start of the line
+    rl.moveCursor(process.stdout, -(option.value.length + 10), 0);
+}
+
+
+
 
 /**
  * @desc Clear bottom text once quit of cursor abovelast line

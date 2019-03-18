@@ -34,8 +34,6 @@ const session = {
     }
 }
 
-let isFirstRun = false;
-
 main();
 
 /**
@@ -122,12 +120,7 @@ function startSession() {
 
     options = alreadySetup ? [_k.INIT, _k.DEPLOY, _k.ALIAS] : [_k.SETUP_AWS];
 
-    let strSessionQ = 'What\'s up?';
-
-    if (isFirstRun)
-        strSessionQ = strSessionQ.concat('(Use space to select option and enter to submit)');
-
-    const getSessionType = _ui.createRadioButton(strSessionQ, options);
+    const getSessionType = _ui.createRadioButton('What\'s up?', options);
 
     const handleSession = getSessionType.then(response => {
 
@@ -207,7 +200,6 @@ function setupAWS() {
                     fs.mkdirSync(`${__dirname}/tmp`);
 
                 _k.LAME_DEFAULT_CONFIG.Role = role;
-                isFirstRun = true;
                 resolve();
             })
             .catch(e => {
@@ -229,7 +221,13 @@ function initLambda(path) {
         let getPath = path === null ? _ui.ask('Enter lambda path to init') : Promise.resolve(path);
 
         getPath.then(path => {
-            path = path.replace(/\/$/, '').trim()
+            path = path.replace(/\/$/, '').trim();
+
+            if (path === '') {
+                reject('Invalid Path!');
+                return;
+            }
+
             session[SESSION_TYPE.INIT].path = path;
             fs.writeFileSync(path + '/' + _k.LAME_CONFIG_FILE_NAME, JSON.stringify(_k.LAME_DEFAULT_CONFIG));
             resolve();

@@ -18,7 +18,7 @@ app.NO = 'No';
 app.ALIAS_QUESTIONS = {
     CREATE: 'Create Alias',
     UPDATE: 'Update Alias',
-    BACK: 'Back to main'
+    BACK: 'Back to Main'
 }
 
 app.GLOBAL_CONFIG_PATH = `${__dirname}/../values/lame.conf.json`;
