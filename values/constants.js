@@ -16,6 +16,9 @@ app.NO = 'No';
 
 app.GLOBAL_CONFIG_PATH = `${__dirname}/../values/lame.conf.json`;
 
+app.HELP_PATH = `${__dirname}/../HELP.txt`;
+app.PACKAGE_PATH = `${__dirname}/../package.json`;
+
 app.LAST_DEOPLOYMENT_PATH = 'LAST_DEOPLOYMENT_PATH';
 
 app.LAME_DEFAULT_CONFIG = {

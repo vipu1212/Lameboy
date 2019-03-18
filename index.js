@@ -83,7 +83,7 @@ function handleArgs() {
 
             case _k.VERSION_CMD:
             case _k.VERSION_CMD_SHORT:
-                const version = JSON.parse(fs.readFileSync('./package.json').toString()).version;
+                const version = JSON.parse(fs.readFileSync(_k.PACKAGE_PATH).toString()).version;
                 _clid.colorLog(`Version ${version}`, _clid.COLORS.BOLD);
                 continueExec = false;
                 break;
@@ -91,7 +91,7 @@ function handleArgs() {
             case _k.HELP_CMD:
             case _k.HELP_CMD_SHORT:
             default:
-                _clid.colorLog(fs.readFileSync('./HELP.txt'));
+                _clid.colorLog(fs.readFileSync(_k.HELP_PATH));
                 continueExec = false;
         }
     }
@@ -100,7 +100,6 @@ function handleArgs() {
 
 function initValues() {
     _k.LAME_DEFAULT_CONFIG.Role = _config.get('Role');
-
 }
 
 /**
