@@ -202,16 +202,22 @@ function createListOptions(list, ui_options, callback, isSingleSelection) {
 
                     let result;
                     if (isSingleSelection) {
-                        result = selections[lastSelectedPosition].value;
+                        result = {
+                            value: selections[lastSelectedPosition].value,
+                            index: lastSelectedPosition
+                        }
                         resolve(result);
                         if (callback) {
                             callback(result);
                         }
                     } else {
                         result = [];
-                        selections.forEach(e => {
+                        selections.forEach((e,i) => {
                             if (e.selected)
-                                result.push(e.value);
+                                result.push({
+                                    value: e.value,
+                                    index: i
+                                });
                         });
                     }
 

@@ -2,6 +2,7 @@ const app = {};
 
 app.INIT = 'Initialize folder';
 app.DEPLOY = 'Deploy Lambda';
+app.ALIAS = 'Manage Alias';
 app.RESET_CMD = '--reset';
 app.VERSION_CMD = '--version';
 app.VERSION_CMD_SHORT = '-v';
@@ -13,6 +14,12 @@ app.LAME_CONFIG_FILE_NAME = 'lame.json';
 
 app.YES = 'Yes';
 app.NO = 'No';
+
+app.ALIAS_QUESTIONS = {
+    CREATE: 'Create Alias',
+    UPDATE: 'Update Alias',
+    BACK: 'Back to main'
+}
 
 app.GLOBAL_CONFIG_PATH = `${__dirname}/../values/lame.conf.json`;
 
