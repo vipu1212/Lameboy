@@ -4,6 +4,7 @@ const fs = require('fs');
 const _ui = require('./ui/clid');
 const _alias = require('./lib/alias');
 const _config = require('./lib/config');
+const _lambda = require('./lib/lambda');
 const _k = require('./values/constants');
 const _deployer = require('./lib/deployer');
 const child_process = require('child_process');
@@ -106,6 +107,7 @@ function handleArgs() {
 
 function initValues() {
     _k.LAME_DEFAULT_CONFIG.Role = _config.get('Role');
+    _lambda.load();
 }
 
 
@@ -136,6 +138,7 @@ function startSession() {
             const setup = setupAWS();
             const session = setup.then(() => {
                 _ui.colorLog('Setup done ✅', _ui.COLORS.FG_GREEN);
+                _lambda.load();
                 return startSession();
             });
             return session;
@@ -391,6 +394,8 @@ function manageAlias() {
                 _ui.colorLog(path, _ui.COLORS.FG_YELLOW);
             }
 
+            _ui.colorLog('\nFetching info...');
+
             const isDirectory = fs.lstatSync(path).isDirectory();
 
             if (!isDirectory) {
@@ -504,11 +509,11 @@ function createAlias(lambda) {
 
             _ui.colorLog(`Creating Alias ${alias.name}...`, _ui.COLORS.FG_YELLOW);
 
-            _alias.create(alias.name, alias.version, alias.description, lambda)
+            return _alias.create(alias.name, alias.version, alias.description, lambda)
         });
 
         create.then(data => {
-            _ui.colorLog(`Created Alias: ${data.Name} || Version: ${alias.FunctionVersion}`, _ui.COLORS.BOLD);
+            _ui.colorLog(`\nCreated Alias: ${data.Name} || Version: ${data.FunctionVersion}`, _ui.COLORS.BOLD);
             resolve();
         }).catch(e => {
             reject(e);
@@ -569,7 +574,7 @@ function updateAlias(lambda, aliases) {
         });
 
         update.then(data => {
-            _ui.colorLog(`Updated Alias: ${data.Name} || Version: ${data.FunctionVersion}`, _ui.COLORS.BOLD);
+            _ui.colorLog(`\nUpdated Alias: ${data.Name} || Version: ${data.FunctionVersion}`, _ui.COLORS.BOLD);
             resolve();
         }).catch(e => {
             reject(e);
@@ -580,7 +585,7 @@ function updateAlias(lambda, aliases) {
 
 function handleDeployementError(e) {
     if (e)
-        _ui.colorLog(`Error: ${e.message}`, _ui.COLORS.FG_RED);
+        _ui.colorLog(`Error: ${e}`, _ui.COLORS.FG_RED);
     return deploy();
 }
 
