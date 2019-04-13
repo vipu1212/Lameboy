@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const fs = require('fs');
-const _ui = require('./ui/clid');
+const _ui = require('./ui/ui');
 const _alias = require('./lib/alias');
 const _config = require('./lib/config');
 const _lambda = require('./lib/lambda');
@@ -305,7 +305,7 @@ function deploy() {
                         return fs.lstatSync(entryPath).isDirectory() && fs.readdirSync(entryPath).indexOf(_k.LAME_CONFIG_FILE_NAME) >= 0;
                     });
                     return entries.length > 0 ? _ui.createCheckbox('\nSelect Lambdas', entries) : Promise.reject({
-                        message: 'No Lambdas found!'
+                        message: 'No Lambdas found! Initialize first to deploy.'
                     });
                 }
             }
@@ -542,7 +542,7 @@ function updateAlias(lambda, aliases) {
         const getVersion = getAliasToUpdate.then(option => {
 
             alias.name = aliases[option.index].name;
-            return _ui.ask(`\nEnter Alias Version (To point to latest, type 'latest')`);
+            return _ui.ask(`\nEnter Alias Version (To always point to the latest deployment, type 'latest')`);
         });
 
         const getDescription = getVersion.then(version => {
@@ -585,7 +585,7 @@ function updateAlias(lambda, aliases) {
 
 function handleDeployementError(e) {
     if (e)
-        _ui.colorLog(`Error: ${e}`, _ui.COLORS.FG_RED);
+        _ui.colorLog(`Error: ${e.message || e}`, _ui.COLORS.FG_RED);
     return deploy();
 }
 
