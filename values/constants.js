@@ -29,7 +29,7 @@ app.PACKAGE_PATH = `${__dirname}/../package.json`;
 app.LAST_DEOPLOYMENT_PATH = 'LAST_DEOPLOYMENT_PATH';
 
 app.LAME_DEFAULT_CONFIG = {
-    Runtime: 'nodejs8.10',
+    Runtime: 'nodejs12.x',
     MemorySize: 128,
     Handler: 'index.handler',
     Timeout: 10,
