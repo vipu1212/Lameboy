@@ -2,7 +2,6 @@
 
 const fs = require('fs');
 const _ui = require('./ui/ui');
-const _alias = require('./lib/alias');
 const _lambda = require('./lib/lambda');
 const _store = require('./lib/store');
 const _k = require('./values/constants');
@@ -16,8 +15,7 @@ const SESSION_TYPE = {
     INIT: 1,
     DEPLOY: 2,
     SETUP: 3,
-    ALIAS: 4,
-    PROFILE: 5
+    PROFILE: 4
 }
 
 const session = {
@@ -25,12 +23,6 @@ const session = {
         path: null
     },
     [SESSION_TYPE.DEPLOY]: {
-        path: null
-    },
-    [SESSION_TYPE.ALIAS]: {
-        path: null
-    },
-    [SESSION_TYPE.ALIAS]: {
         path: null
     }
 }
@@ -143,7 +135,7 @@ async function startSession() {
 
         const alreadySetup = fs.existsSync(CERT_PATH);
 
-        options = alreadySetup ? [_k.INIT, _k.DEPLOY, _k.ALIAS, _k.MANAGE_PROFILES] : [_k.SETUP_AWS];
+        options = alreadySetup ? [_k.INIT, _k.DEPLOY, _k.MANAGE_PROFILES] : [_k.SETUP_AWS];
 
         const response = await _ui.createRadioButton(`What\'s up? [current profile: ${_store.getLastProfileName()}]`, options);
 
@@ -163,15 +155,13 @@ async function startSession() {
 
             _lambda.load(_store.getLastProfileName());
 
+            resolve();
+
             await startSession();
 
         } else if (response.value === _k.DEPLOY) {
-            return deploy();
 
-        } else if (response.value === _k.ALIAS) {
-            return manageAlias().then(() => {
-                return startSession();
-            });
+            return deploy();
 
         } else if (response.value === _k.MANAGE_PROFILES) {
             await _profiles.handleSetup();
@@ -341,226 +331,6 @@ function deploy() {
                 }
                 _ui.colorLog(`\nDeployed ${result.name} || Version: ${result.version}`, _ui.COLORS.BOLD);
             }
-            resolve();
-        }).catch(e => {
-            reject(e);
-        })
-    });
-}
-
-
-/**
- * Manages functions Alias
- */
-function manageAlias() {
-    return new Promise((resolve, reject) => {
-
-        let lambdaName;
-
-        const lambdaAliases = [];
-
-        let strPathQ = `\nEnter Lambda path`;
-
-        const lastPath = _store.getLastPathUsed();
-
-        if (lastPath)
-            strPathQ = strPathQ.concat(` OR hit just enter to use ${lastPath}`);
-
-        const getPath = _ui.ask(strPathQ);
-
-        const getAliases = getPath.then(path => {
-
-            path = path.trim();
-
-            if (path === '' && lastPath) {
-                path = lastPath;
-                _ui.colorLog(path, _ui.COLORS.FG_YELLOW);
-            }
-
-            _ui.colorLog('\nFetching info...');
-
-            const isDirectory = fs.lstatSync(path).isDirectory();
-
-            if (!isDirectory) {
-                _ui.colorLog('Not a valid directory!', _ui.COLORS.FG_RED);
-                return Promise.reject('Invalid Directory');
-            } else {
-
-                if (path === './') {
-                    path = child_process.execSync('pwd').toString().trim();
-                }
-
-                // If Lambda folder
-                const isLambdaPath = fs.readdirSync(path).indexOf(_k.LAME_CONFIG_FILE_NAME) >= 0;
-
-                if (!isLambdaPath) {
-
-                    _ui.colorLog('Not a Lambda Folder managed by Lameboy', _ui.COLORS.FG_RED);
-                    return manageAlias();
-
-                } else {
-
-                    session[SESSION_TYPE.ALIAS].path = path;
-
-                    _store.setLastPathUsed(path);
-
-                    const paths = path.split('/');
-                    lambdaName = paths[paths.length - 1];
-                    return _alias.getAllAlias(lambdaName);
-                }
-            }
-        });
-
-        const getTask = getAliases.then(aliases => {
-            const options = [_k.ALIAS_QUESTIONS.CREATE, _k.ALIAS_QUESTIONS.BACK];
-
-            const hasAliases = aliases.length > 0;
-            if (hasAliases)
-                options.splice(1, 0, _k.ALIAS_QUESTIONS.UPDATE);
-
-            aliases.forEach(alias => {
-
-                lambdaAliases.push({
-                    name: alias.Name,
-                    version: alias.FunctionVersion
-                });
-            });
-
-            return _ui.createRadioButton('What to do?', options);
-        });
-
-        const handleTask = getTask.then(task => {
-            if (task.value === _k.ALIAS_QUESTIONS.CREATE) {
-                return createAlias(lambdaName);
-            } else if (task.value === _k.ALIAS_QUESTIONS.UPDATE) {
-                return updateAlias(lambdaName, lambdaAliases);
-            } else if (task.value === _k.ALIAS_QUESTIONS.BACK) {
-                return startSession();
-            }
-        });
-
-        handleTask.then(() => {
-            resolve();
-        }).catch(e => {
-            reject(e);
-        })
-    });
-}
-
-function createAlias(lambda) {
-    return new Promise((resolve, reject) => {
-
-        const alias = {
-            name: null,
-            version: null,
-            description: null
-        }
-
-        const getName = _ui.ask('Enter Alias Name', _ui.COLORS.BOLD);
-
-        const getVersion = getName.then(name => {
-
-            if (!name.trim()) {
-                reject('Empty alias name');
-                return;
-            }
-
-            alias.name = name;
-
-            return _ui.ask(`Enter Alias Version (To point to latest, type 'latest')`);
-        });
-
-        const getDescription = getVersion.then(version => {
-
-            version = version.trim();
-
-            if (isNaN(parseInt(version))) {
-
-                if (version === 'latest')
-                    version = '$LATEST'
-
-                if (version !== '$LATEST') {
-                    return Promise.reject(`Incorrect version value ${version}`)
-                }
-            }
-
-            alias.version = version;
-
-            return _ui.ask('Add Description (optional)');
-        });
-
-        const create = getDescription.then(desc => {
-
-            alias.description = desc;
-
-            _ui.colorLog(`Creating Alias ${alias.name}...`, _ui.COLORS.FG_YELLOW);
-
-            return _alias.create(alias.name, alias.version, alias.description, lambda)
-        });
-
-        create.then(data => {
-            _ui.colorLog(`\nCreated Alias: ${data.Name} || Version: ${data.FunctionVersion}`, _ui.COLORS.BOLD);
-            resolve();
-        }).catch(e => {
-            reject(e);
-        })
-    });
-}
-
-
-function updateAlias(lambda, aliases) {
-    return new Promise((resolve, reject) => {
-
-        const options = [];
-
-        const alias = {
-            name: null,
-            version: null,
-            description: null
-        }
-
-        aliases.forEach(alias => {
-            options.push(`${alias.name}, current: ${alias.version}`);
-        });
-
-        const getAliasToUpdate = _ui.createRadioButton('Select Alias to Update', options);
-
-        const getVersion = getAliasToUpdate.then(option => {
-
-            alias.name = aliases[option.index].name;
-            return _ui.ask(`\nEnter Alias Version (To always point to the latest deployment, type 'latest')`);
-        });
-
-        const getDescription = getVersion.then(version => {
-
-            version = version.trim();
-
-            if (isNaN(parseInt(version))) {
-
-                if (version === 'latest')
-                    version = '$LATEST'
-
-                if (version !== '$LATEST') {
-                    return Promise.reject(`Incorrect version value ${version}`)
-                }
-            }
-
-            alias.version = version;
-
-            return _ui.ask('Add Description (optional)');
-        });
-
-        const update = getDescription.then(desc => {
-
-            alias.description = desc;
-
-            _ui.colorLog(`Updating Alias ${alias.name}...`, _ui.COLORS.FG_YELLOW);
-
-            return _alias.update(alias.name, alias.version, alias.description, lambda)
-        });
-
-        update.then(data => {
-            _ui.colorLog(`\nUpdated Alias: ${data.Name} || Version: ${data.FunctionVersion}`, _ui.COLORS.BOLD);
             resolve();
         }).catch(e => {
             reject(e);
