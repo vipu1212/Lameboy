@@ -83,12 +83,12 @@ app.createCheckbox = function (title, list, ui_options, callback) {
  * @param {object} ui_options Options to customize colors and symbols
  * @param {function} callback Callback function
  */
-app.createRadioButton = function (title, list, ui_options, callback) {
+app.createRadioButton = async (title, list, ui_options, callback) => {
     return createButtons(title, list, ui_options, callback, true)
 }
 
 
-function createButtons(title, list, ui_options, callback, isSingleSelection) {
+async function createButtons(title, list, ui_options, callback, isSingleSelection) {
 
     ui_options = ui_options || {};
     const colorTitle = ui_options.colorTitle || _colors.FG_GREEN;
@@ -102,7 +102,7 @@ function createButtons(title, list, ui_options, callback, isSingleSelection) {
 }
 
 
-function createListOptions(list, ui_options, callback, isSingleSelection) {
+async function createListOptions(list, ui_options, callback, isSingleSelection) {
     return new Promise((resolve, reject) => {
 
         ui_options.colorSelected = ui_options.colorSelected || _colors.FG_GREEN;

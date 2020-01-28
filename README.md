@@ -62,7 +62,7 @@ Once intialized, you can deploy from the root folder where multiple lambda folde
 #### Reset
 If you wan't to change your setup settings, you'll have reset.
 ```sh
-$ lame reset
+$ lame --reset
 ```
 
 ### Knows Issues

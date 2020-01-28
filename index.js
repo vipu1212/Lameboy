@@ -3,19 +3,21 @@
 const fs = require('fs');
 const _ui = require('./ui/ui');
 const _alias = require('./lib/alias');
-const _config = require('./lib/config');
 const _lambda = require('./lib/lambda');
+const _store = require('./lib/store');
 const _k = require('./values/constants');
 const _deployer = require('./lib/deployer');
+const _profiles = require('./lib/profiles');
 const child_process = require('child_process');
-const CERT_PATH = __dirname + '/values/aws.json';
+const CERT_PATH = __dirname + '/data/profiles.json';
 
 const SESSION_TYPE = {
     NONE: 0,
     INIT: 1,
     DEPLOY: 2,
     SETUP: 3,
-    ALIAS: 4
+    ALIAS: 4,
+    PROFILE: 5
 }
 
 const session = {
@@ -25,10 +27,8 @@ const session = {
     [SESSION_TYPE.DEPLOY]: {
         path: null
     },
-    [SESSION_TYPE.SETUP]: {
-        accessKeyId: null,
-        secretAccessKey: null,
-        region: 'us-west-2'
+    [SESSION_TYPE.ALIAS]: {
+        path: null
     },
     [SESSION_TYPE.ALIAS]: {
         path: null
@@ -38,40 +38,36 @@ const session = {
 main();
 
 /**
- * Entry point for program.
- * Initializes Lambda Options
- * Prints banner
- * Handles Session
+ * @async
+ * @description Entry point for program.
  */
-function main() {
-    const continueExec = handleArgs();
+async function main() {
 
-    if (!continueExec) {
-        stopExec();
-        return;
+    try {
+
+        const continueExec = handleArgs();
+
+        if (!continueExec) {
+            exitProcess(0);
+        }
+
+        initValues();
+
+        printBanner();
+
+        await startSession();
+
+    } catch (e) {
+        console.error(`Error: ${e.stack}`);
+        exitProcess(1);
     }
-
-    initValues();
-    printBanner();
-    startSession().then(() => {
-        stopExec();
-    }).catch(e => {
-        console.log(`Error: ${e}`);
-        process.exit(-1);
-    })
 }
 
 
 /**
- * Stop program
- */
-function stopExec() {
-    process.exit(0);
-}
-
-
-/**
- * Handles arguments provided while starting the application
+ * @description Handles arguments provided while starting the application
+ *
+ * @returns Boolean
  */
 function handleArgs() {
     const args = process.argv;
@@ -84,7 +80,6 @@ function handleArgs() {
             case _k.RESET_CMD:
                 if (fs.existsSync(CERT_PATH))
                     fs.unlinkSync(CERT_PATH);
-                _config.reset();
                 break;
 
             case _k.VERSION_CMD:
@@ -105,43 +100,70 @@ function handleArgs() {
 }
 
 
-function initValues() {
-    _k.LAME_DEFAULT_CONFIG.Role = _config.get('Role');
-    _lambda.load();
+/**
+ * @description Stops the node process
+ */
+function exitProcess(code) {
+    process.exit(code);
 }
 
 
 /**
- * Handled all session types
+ * @description Prints load banner
  */
-function startSession() {
+function printBanner() {
+    _ui.colorLog('\n   🚀           🌕');
+    _ui.colorLog('\n🌧🌧 🌧☁️ ☁️ 🌈☁️☁️🌧🌧 🌧 ☁️🌧 🌧🌧\n');
+    _ui.colorLog('       ️LAMEBOY    \n', _ui.COLORS.BOLD);
+    _ui.colorLog('🌱🌴🌳🏚🌳☘️ 🏫🌳🌲🏢🌳🏡🍃');
+}
 
-    let options;
 
-    const alreadySetup = fs.existsSync(CERT_PATH);
+/**
+ * Load all session level values
+ */
+function initValues() {
+    const lastProfile = _store.getLastProfileName();
+    _lambda.load(lastProfile);
+}
 
-    options = alreadySetup ? [_k.INIT, _k.DEPLOY, _k.ALIAS] : [_k.SETUP_AWS];
 
-    const getSessionType = _ui.createRadioButton('What\'s up?', options);
 
-    const handleSession = getSessionType.then(response => {
+
+/**
+ * @async
+ * @description Handled all session types
+ *
+ * @returns Promise<Boolean>
+ */
+async function startSession() {
+    return new Promise(async (resolve, reject) => {
+
+        let options;
+
+        const alreadySetup = fs.existsSync(CERT_PATH);
+
+        options = alreadySetup ? [_k.INIT, _k.DEPLOY, _k.ALIAS, _k.MANAGE_PROFILES] : [_k.SETUP_AWS];
+
+        const response = await _ui.createRadioButton(`What\'s up? [current profile: ${_store.getLastProfileName()}]`, options);
 
         if (response.value === _k.INIT) {
-            const init = initLambda(null);
-            const session = init.then(() => {
-                _ui.colorLog('Initialized Lambda', _ui.COLORS.FG_YELLOW);
-                return startSession();
-            });
-            return session;
+
+            await initLambda();
+
+            resolve();
+
+            await startSession();
 
         } else if (response.value === _k.SETUP_AWS) {
-            const setup = setupAWS();
-            const session = setup.then(() => {
-                _ui.colorLog('Setup done ✅', _ui.COLORS.FG_GREEN);
-                _lambda.load();
-                return startSession();
-            });
-            return session;
+
+            await setupAWS();
+
+            _ui.colorLog('Setup done ✅', _ui.COLORS.FG_GREEN);
+
+            _lambda.load(_store.getLastProfileName());
+
+            await startSession();
 
         } else if (response.value === _k.DEPLOY) {
             return deploy();
@@ -150,65 +172,26 @@ function startSession() {
             return manageAlias().then(() => {
                 return startSession();
             });
-        }
-    });
 
-    return handleSession;
+        } else if (response.value === _k.MANAGE_PROFILES) {
+            await _profiles.handleSetup();
+            await startSession();
+        }
+        // resolve();
+    })
 }
 
 
 /**
- * @desc Asks user to input required AWS creds and default Role
+ * @description Asks user to input required AWS creds and default Role
+ *              Stores all the informationn in values/aws.json
  */
-function setupAWS() {
-    return new Promise((resolve, reject) => {
+async function setupAWS() {
 
-        const getAccessID = _ui.ask('Enter your AWS Access Key');
+    await _profiles.setupProfile();
 
-        const getSecretKey = getAccessID.then(keyID => {
-
-                session[SESSION_TYPE.SETUP].accessKeyId = keyID;
-
-                return _ui.ask('Enter your AWS Secret Key');
-            })
-            .catch(e => {
-                reject(e)
-            })
-
-        const getRegion = getSecretKey.then(secret => {
-                session[SESSION_TYPE.SETUP].secretAccessKey = secret;
-
-                return _ui.ask('Enter region. Default is us-west-2');
-            })
-            .catch(e => {
-                reject(e)
-            })
-
-        const getRoleID = getRegion.then(region => {
-            if (region)
-                session[SESSION_TYPE.SETUP].region = region;
-
-            return _ui.ask('Enter Default Role ARN. Looks like arn:aws:iam::xxxxxxx:role/xxxxxxx')
-        });
-
-        getRoleID.then(role => {
-
-                fs.writeFileSync(CERT_PATH, JSON.stringify(session[SESSION_TYPE.SETUP]));
-
-                _config.upsert({
-                    Role: role
-                });
-
-                if (!fs.existsSync(`${__dirname}/tmp`))
-                    fs.mkdirSync(`${__dirname}/tmp`);
-
-                _k.LAME_DEFAULT_CONFIG.Role = role;
-                resolve();
-            })
-            .catch(e => {
-                reject(e)
-            })
-    })
+    if (!fs.existsSync(`${__dirname}/tmp`))
+        fs.mkdirSync(`${__dirname}/tmp`);
 }
 
 
@@ -218,24 +201,26 @@ function setupAWS() {
  *
  * @param {string} path Lambda folder path to initialize
  */
-function initLambda(path) {
-    return new Promise((resolve, reject) => {
+async function initLambda() {
 
-        let getPath = path === null ? _ui.ask('Enter lambda path to init') : Promise.resolve(path);
+        let path = await _ui.ask('Enter lambda path to init');
 
-        getPath.then(path => {
-            path = path.replace(/\/$/, '').trim();
+        path = path.replace(/\/$/, '').trim();
 
-            if (path === '') {
-                reject('Invalid Path!');
-                return;
-            }
+        if (!path || !fs.existsSync(path)) {
+            _ui.colorLog('\n Path invalid', _ui.COLORS.FG_RED);
+            return false;
+        }
 
-            session[SESSION_TYPE.INIT].path = path;
-            fs.writeFileSync(path + '/' + _k.LAME_CONFIG_FILE_NAME, JSON.stringify(_k.LAME_DEFAULT_CONFIG));
-            resolve();
-        });
-    });
+        fs.writeFileSync(path + '/' + _k.LAME_CONFIG_FILE_NAME, JSON.stringify(_k.LAME_DEFAULT_CONFIG));
+
+        session[SESSION_TYPE.INIT].path = path;
+
+        _store.setLastPathUsed(path);
+
+        _ui.colorLog('\nInitialized Lambda', _ui.COLORS.FG_YELLOW);
+
+        return true;
 }
 
 
@@ -248,7 +233,7 @@ function deploy() {
         let paths;
 
         // Ask for the path
-        const lastPath = _config.get(_k.LAST_DEOPLOYMENT_PATH);
+        const lastPath = _store.getLastPathUsed();
 
         let strPathQ = `\nEnter Lambda(s) paths`;
 
@@ -282,11 +267,7 @@ function deploy() {
                 // Since we have to seperate out lambda name from path and save the later path value in session,
                 // we do the following operations.
                 // Example: Before -> full path = /path/to/lambda/lambda_name
-                // After -> session[deploy][path] = /path/to/lambda and lambdaNmae = lambda_name
-
-                _config.upsert({
-                    [_k.LAST_DEOPLOYMENT_PATH]: path
-                });
+                // After -> session[deploy][path] = /path/to/lambda and lambdaName = lambda_name
 
                 if (isLambdaPath) {
 
@@ -296,7 +277,9 @@ function deploy() {
                     const dirPath = dirs.join('/');
 
                     session[SESSION_TYPE.DEPLOY].path = dirPath;
-                    return Promise.resolve([{value: lambda}]);
+                    return Promise.resolve([{
+                        value: lambda
+                    }]);
 
                 } else {
                     session[SESSION_TYPE.DEPLOY].path = path.replace(/\/$/, '');
@@ -348,7 +331,7 @@ function deploy() {
             return handleDeployementError(e);
         });
 
-        // If deploting was success, then log it
+        // If deploying was success, then log it
         upload.then(results => {
             for (let index in results) {
                 let result = results[index];
@@ -378,7 +361,7 @@ function manageAlias() {
 
         let strPathQ = `\nEnter Lambda path`;
 
-        const lastPath = _config.get(_k.LAST_DEOPLOYMENT_PATH);
+        const lastPath = _store.getLastPathUsed();
 
         if (lastPath)
             strPathQ = strPathQ.concat(` OR hit just enter to use ${lastPath}`);
@@ -411,13 +394,16 @@ function manageAlias() {
                 const isLambdaPath = fs.readdirSync(path).indexOf(_k.LAME_CONFIG_FILE_NAME) >= 0;
 
                 if (!isLambdaPath) {
+
                     _ui.colorLog('Not a Lambda Folder managed by Lameboy', _ui.COLORS.FG_RED);
                     return manageAlias();
+
                 } else {
+
                     session[SESSION_TYPE.ALIAS].path = path;
-                    _config.upsert({
-                        [_k.LAST_DEOPLOYMENT_PATH]: path
-                    })
+
+                    _store.setLastPathUsed(path);
+
                     const paths = path.split('/');
                     lambdaName = paths[paths.length - 1];
                     return _alias.getAllAlias(lambdaName);
@@ -430,7 +416,7 @@ function manageAlias() {
 
             const hasAliases = aliases.length > 0;
             if (hasAliases)
-                options.splice(1,0,_k.ALIAS_QUESTIONS.UPDATE);
+                options.splice(1, 0, _k.ALIAS_QUESTIONS.UPDATE);
 
             aliases.forEach(alias => {
 
@@ -446,7 +432,7 @@ function manageAlias() {
         const handleTask = getTask.then(task => {
             if (task.value === _k.ALIAS_QUESTIONS.CREATE) {
                 return createAlias(lambdaName);
-            } else if (task.value === _k.ALIAS_QUESTIONS.UPDATE){
+            } else if (task.value === _k.ALIAS_QUESTIONS.UPDATE) {
                 return updateAlias(lambdaName, lambdaAliases);
             } else if (task.value === _k.ALIAS_QUESTIONS.BACK) {
                 return startSession();
@@ -587,12 +573,4 @@ function handleDeployementError(e) {
     if (e)
         _ui.colorLog(`Error: ${e.message || e}`, _ui.COLORS.FG_RED);
     return deploy();
-}
-
-
-function printBanner() {
-    _ui.colorLog('\n   🚀           🌕');
-    _ui.colorLog('\n🌧🌧 🌧☁️ ☁️ 🌈☁️☁️🌧🌧 🌧 ☁️🌧 🌧🌧\n');
-    _ui.colorLog('       ️LAMEBOY    \n', _ui.COLORS.BOLD);
-    _ui.colorLog('🌱🌴🌳🏚🌳☘️ 🏫🌳🌲🏢🌳🏡🍃');
 }

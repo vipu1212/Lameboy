@@ -3,6 +3,7 @@ const app = {};
 app.INIT = 'Initialize folder';
 app.DEPLOY = 'Deploy Lambda';
 app.ALIAS = 'Manage Alias';
+app.MANAGE_PROFILES = 'Manage Profiles';
 app.RESET_CMD = '--reset';
 app.VERSION_CMD = '--version';
 app.VERSION_CMD_SHORT = '-v';
@@ -21,12 +22,19 @@ app.ALIAS_QUESTIONS = {
     BACK: 'Back to Main'
 }
 
-app.GLOBAL_CONFIG_PATH = `${__dirname}/../values/lame.conf.json`;
+app.PROFILE_QUESTIONS = {
+    USE: 'Use',
+    EDIT: 'Edit',
+    ADD_NEW_PROFILE: 'Add New Profile'
+}
+
+app.KEY = {
+    LAST_PROFILE: 'LAST_PROFILE',
+    LAST_PATH_USED: 'LAST_PATH_USED'
+}
 
 app.HELP_PATH = `${__dirname}/../HELP.txt`;
 app.PACKAGE_PATH = `${__dirname}/../package.json`;
-
-app.LAST_DEOPLOYMENT_PATH = 'LAST_DEOPLOYMENT_PATH';
 
 app.LAME_DEFAULT_CONFIG = {
     Runtime: 'nodejs12.x',
