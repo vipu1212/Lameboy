@@ -8,24 +8,8 @@ const _k = require('./values/constants');
 const _deployer = require('./lib/deployer');
 const _profiles = require('./lib/profiles');
 const child_process = require('child_process');
-const CERT_PATH = __dirname + '/data/profiles.json';
-
-const SESSION_TYPE = {
-    NONE: 0,
-    INIT: 1,
-    DEPLOY: 2,
-    SETUP: 3,
-    PROFILE: 4
-}
-
-const session = {
-    [SESSION_TYPE.INIT]: {
-        path: null
-    },
-    [SESSION_TYPE.DEPLOY]: {
-        path: null
-    }
-}
+const PROFILE_PATH = __dirname + '/data/profiles.json';
+const STORE_PATH = __dirname + '/data/store.json';
 
 main();
 
@@ -43,7 +27,7 @@ async function main() {
             exitProcess(0);
         }
 
-        initValues();
+        loadLambdaProfile();
 
         printBanner();
 
@@ -59,7 +43,7 @@ async function main() {
 /**
  * @description Handles arguments provided while starting the application
  *
- * @returns Boolean
+ * @returns {Boolean} Should continue further execution or not
  */
 function handleArgs() {
     const args = process.argv;
@@ -70,8 +54,12 @@ function handleArgs() {
 
             case _k.RESET:
             case _k.RESET_CMD:
-                if (fs.existsSync(CERT_PATH))
-                    fs.unlinkSync(CERT_PATH);
+
+                if (fs.existsSync(PROFILE_PATH))
+                    fs.unlinkSync(PROFILE_PATH);
+
+                if (fs.existsSync(STORE_PATH))
+                    fs.unlinkSync(STORE_PATH);
                 break;
 
             case _k.VERSION_CMD:
@@ -112,69 +100,70 @@ function printBanner() {
 
 
 /**
- * Load all session level values
+ * @description Loads Lambda configuration
  */
-function initValues() {
-    const lastProfile = _store.getLastProfileName();
-    _lambda.load(lastProfile);
+function loadLambdaProfile() {
+    _lambda.load(_store.getLastProfileName());
 }
-
-
 
 
 /**
  * @async
- * @description Handled all session types
+ * @description Handles all session types
  *
- * @returns Promise<Boolean>
+ * @returns {Promise<Boolean>} Was successful or not
  */
 async function startSession() {
     return new Promise(async (resolve, reject) => {
 
-        let options;
+        try {
 
-        const alreadySetup = fs.existsSync(CERT_PATH);
+            let options;
 
-        options = alreadySetup ? [_k.INIT, _k.DEPLOY, _k.MANAGE_PROFILES] : [_k.SETUP_AWS];
+            const alreadySetup = fs.existsSync(PROFILE_PATH);
 
-        const response = await _ui.createRadioButton(`What\'s up? [current profile: ${_store.getLastProfileName()}]`, options);
+            options = alreadySetup ? [_k.INIT, _k.DEPLOY, _k.MANAGE_PROFILES] : [_k.SETUP_AWS];
 
-        if (response.value === _k.INIT) {
+            let introText = `What\'s up?`;
 
-            await initLambda();
+            if (alreadySetup) {
+                introText = introText.concat(`[current profile: ${_store.getLastProfileName()}]`);
+            }
+
+            const response = await _ui.createRadioButton(introText, options)
+
+            if (response.value === _k.INIT) {
+
+                await initLambda();
+
+            } else if (response.value === _k.SETUP_AWS) {
+
+                await setupAWS();
+
+            } else if (response.value === _k.DEPLOY) {
+
+                await deploy();
+
+            } else if (response.value === _k.MANAGE_PROFILES) {
+
+                await _profiles.handleSetup();
+                loadLambdaProfile();
+            }
 
             resolve();
 
             await startSession();
 
-        } else if (response.value === _k.SETUP_AWS) {
-
-            await setupAWS();
-
-            _ui.colorLog('Setup done ✅', _ui.COLORS.FG_GREEN);
-
-            _lambda.load(_store.getLastProfileName());
-
-            resolve();
-
-            await startSession();
-
-        } else if (response.value === _k.DEPLOY) {
-
-            return deploy();
-
-        } else if (response.value === _k.MANAGE_PROFILES) {
-            await _profiles.handleSetup();
-            await startSession();
+        } catch (e) {
+            handleError(e);
         }
-        // resolve();
     })
 }
 
 
 /**
  * @description Asks user to input required AWS creds and default Role
- *              Stores all the informationn in values/aws.json
+ *              Stores all the informationn in values/profiles.json
  */
 async function setupAWS() {
 
@@ -182,165 +171,163 @@ async function setupAWS() {
 
     if (!fs.existsSync(`${__dirname}/tmp`))
         fs.mkdirSync(`${__dirname}/tmp`);
+
+    _ui.colorLog('Setup done ✅', _ui.COLORS.FG_GREEN);
+
+    _lambda.load(_store.getLastProfileName());
 }
 
 
 /**
- * Creates lame.json file in given path with default config.
- * If path not present, then ask for the path input
+ * @description Creates lame.json file in given path with default config.
+ *              If path not present, then ask for the path input
  *
- * @param {string} path Lambda folder path to initialize
+ * @param {String} path Lambda folder path to initialize
  */
 async function initLambda() {
 
-        let path = await _ui.ask('Enter lambda path to init');
+    let path = await _ui.ask('Enter lambda path to init');
 
-        path = path.replace(/\/$/, '').trim();
+    path = path.replace(/\/$/, '').trim();
 
-        if (!path || !fs.existsSync(path)) {
-            _ui.colorLog('\n Path invalid', _ui.COLORS.FG_RED);
-            return false;
-        }
+    if (!path || !fs.existsSync(path)) {
+        _ui.colorLog('\n Path invalid', _ui.COLORS.FG_RED);
+        return false;
+    }
 
-        fs.writeFileSync(path + '/' + _k.LAME_CONFIG_FILE_NAME, JSON.stringify(_k.LAME_DEFAULT_CONFIG));
+    fs.writeFileSync(path + '/' + _k.LAME_CONFIG_FILE_NAME, JSON.stringify(_k.LAME_DEFAULT_CONFIG, null, 1));
 
-        session[SESSION_TYPE.INIT].path = path;
+    _store.setLastPathUsed(path);
 
-        _store.setLastPathUsed(path);
+    _ui.colorLog('\nInitialized Lambda', _ui.COLORS.FG_YELLOW);
 
-        _ui.colorLog('\nInitialized Lambda', _ui.COLORS.FG_YELLOW);
-
-        return true;
+    return true;
 }
 
 
 /**
- * Deploys Lambda functions
+ * @description Deploys Lambda functions
+ *
+ * @returns {Promise<Boolean>} Was successful or not
  */
-function deploy() {
-    return new Promise((resolve, reject) => {
+async function deploy() {
 
-        let paths;
+    let paths;
+    const lambdas = [];
 
-        // Ask for the path
-        const lastPath = _store.getLastPathUsed();
+    // Ask for the path
+    const lastPath = _store.getLastPathUsed();
 
-        let strPathQ = `\nEnter Lambda(s) paths`;
+    let strPathQ = `\nEnter Lambda(s) paths`;
 
-        if (lastPath)
-            strPathQ = strPathQ.concat(` OR hit just enter to use ${lastPath}`);
+    if (lastPath)
+        strPathQ = strPathQ.concat(` OR hit just enter to use ${lastPath}`);
 
-        const getPath = _ui.ask(strPathQ);
+    let path = await _ui.ask(strPathQ);
 
-        // If path is of lambda then use it or list sub-directories which are lambdas
-        const getLambdas = getPath.then(path => {
+    // If path is of lambda then use it or list sub-directories which are lambdas
+    path = path.trim();
 
-            path = path.trim();
+    if (path === '' && lastPath)
+        path = lastPath;
 
-            if (path === '' && lastPath)
-                path = lastPath;
+    const isDirectory = fs.lstatSync(path).isDirectory();
 
-            const isDirectory = fs.lstatSync(path).isDirectory();
+    if (!isDirectory) {
+        _ui.colorLog('Not a valid directory!', _ui.COLORS.FG_RED);
+        return false;
 
-            if (!isDirectory) {
-                _ui.colorLog('Not a valid directory!', _ui.COLORS.FG_RED);
-                return Promise.reject('Invalid Directory');
-            } else {
+    } else {
 
-                if (path === './') {
-                    path = child_process.execSync('pwd').toString().trim();
-                }
+        if (path === './') {
+            path = child_process.execSync('pwd').toString().trim();
+        }
 
-                // If Lambda folder
-                const isLambdaPath = fs.readdirSync(path).indexOf(_k.LAME_CONFIG_FILE_NAME) >= 0;
+        _store.setLastPathUsed(path);
 
-                // Since we have to seperate out lambda name from path and save the later path value in session,
-                // we do the following operations.
-                // Example: Before -> full path = /path/to/lambda/lambda_name
-                // After -> session[deploy][path] = /path/to/lambda and lambdaName = lambda_name
+        // If Lambda folder
+        const isLambdaPath = fs.readdirSync(path).indexOf(_k.LAME_CONFIG_FILE_NAME) >= 0;
 
-                if (isLambdaPath) {
+        // Since we have to seperate out lambda name from path and save the later path value in session,
+        // we do the following operations.
+        // Example: Before -> full path = /path/to/lambda/lambda_name
+        // After -> /path/to/lambda and lambdaName = lambda_name
 
-                    const dirs = path.split('/');
-                    const lambda = dirs[dirs.length - 1];
-                    dirs.splice(dirs.length - 1, 1);
-                    const dirPath = dirs.join('/');
+        if (isLambdaPath) {
 
-                    session[SESSION_TYPE.DEPLOY].path = dirPath;
-                    return Promise.resolve([{
-                        value: lambda
-                    }]);
+            const dirs = path.split('/');
+            const lambdaName = dirs[dirs.length - 1];
 
-                } else {
-                    session[SESSION_TYPE.DEPLOY].path = path.replace(/\/$/, '');
-                    const entries = fs.readdirSync(path).filter(entry => {
-                        let entryPath = path + '/' + entry;
-                        return fs.lstatSync(entryPath).isDirectory() && fs.readdirSync(entryPath).indexOf(_k.LAME_CONFIG_FILE_NAME) >= 0;
-                    });
-                    return entries.length > 0 ? _ui.createCheckbox('\nSelect Lambdas', entries) : Promise.reject({
-                        message: 'No Lambdas found! Initialize first to deploy.'
-                    });
-                }
-            }
-        }).catch(e => {
-            return handleDeployementError(e);
-        })
-
-        // Confirm before deploying
-        const confirm = getLambdas.then(lambdas => {
-
-            if (!lambdas || lambdas.length === 0) {
-                return Promise.reject();
-            }
-
-            let strLambdas = '';
-
-            paths = lambdas.map((lambda, index) => {
-
-                strLambdas = strLambdas.concat(lambda.value);
-
-                if (index < lambdas.length - 1)
-                    strLambdas = strLambdas.concat(', ');
-
-                return session[SESSION_TYPE.DEPLOY].path + '/' + lambda.value
+            lambdas.push({
+                value: lambdaName
             });
 
-            return _ui.createRadioButton(`\nDeploying ${lambdas.length} function(s) [${strLambdas}]  \nCool?`, [_k.YES, _k.NO]);
-        }).catch(e => {
-            return handleDeployementError(e);
-        });
+        } else {
 
-        // Deploy
-        const upload = confirm.then(confirmed => {
-            if (confirmed.value === _k.YES) {
-                return _deployer.uploadFunctions(paths);
-            } else {
-                return Promise.reject();
+            const entries = fs.readdirSync(path).filter(entry => {
+                let entryPath = path + '/' + entry;
+                if (fs.lstatSync(entryPath).isDirectory())
+                    return fs.lstatSync(entryPath).isDirectory() && fs.readdirSync(entryPath).indexOf(_k.LAME_CONFIG_FILE_NAME) >= 0;
+            });
+
+            console.log(`entries ${JSON.stringify(entries)}`);
+
+            if (entries.length === 0) {
+                _ui.colorLog('No Lambdas found! Initialize first to deploy.')
+                return false;
+
             }
-        }).catch(e => {
-            return handleDeployementError(e);
-        });
 
-        // If deploying was success, then log it
-        upload.then(results => {
-            for (let index in results) {
-                let result = results[index];
+            const selectedLambdaOptions = await _ui.createCheckbox('\nSelect Lambdas', entries);
+            selectedLambdaOptions.forEach(selectedLambda => {
+                lambdas.push(selectedLambda);
+            });
+        }
+    }
 
-                if (result.version === 1) {
-                    initLambda(session[SESSION_TYPE.DEPLOY].path + '/' + result.name);
-                }
-                _ui.colorLog(`\nDeployed ${result.name} || Version: ${result.version}`, _ui.COLORS.BOLD);
-            }
-            resolve();
-        }).catch(e => {
-            reject(e);
-        })
+
+    // Confirm before deploying
+    if (!lambdas || lambdas.length === 0) {
+        return false;
+    }
+
+    let strLambdas = '';
+
+    paths = lambdas.map((lambda, index) => {
+
+        strLambdas = strLambdas.concat(lambda.value);
+
+        if (index < lambdas.length - 1)
+            strLambdas = strLambdas.concat(', ');
+
+        return path + '/' + lambda.value
     });
+
+    const confirmed = await _ui.createRadioButton(`\nDeploying ${lambdas.length} function(s) [${strLambdas}]  \nCool?`, [_k.YES, _k.NO]);
+
+    if (confirmed.value === _k.NO) {
+        return false
+    }
+
+    // Deploy
+    const results = await _deployer.uploadFunctions(paths);
+
+    // If deploying was success, then log it
+    for (let index in results) {
+        let result = results[index];
+        _ui.colorLog(`\nDeployed ${result.name} || Version: ${result.version}`, _ui.COLORS.BOLD);
+    }
+
+    return true;
 }
 
 
-function handleDeployementError(e) {
-    if (e)
-        _ui.colorLog(`Error: ${e.message || e}`, _ui.COLORS.FG_RED);
-    return deploy();
+/**
+ * @description Prints error and exits node process
+ * @param {Error} error
+ */
+function handleError(error) {
+    if (error)
+        _ui.colorLog(`Error: ${error.stack}`, _ui.COLORS.FG_RED);
+    exitProcess(1);
 }
