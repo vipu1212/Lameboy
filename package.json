@@ -1,6 +1,6 @@
 {
   "name": "lameboy",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "AWS Lambda functions Deployment Interactive Tool. So very beta (╯°□°）╯︵ ┻━┻",
   "main": "index.js",
   "scripts": {

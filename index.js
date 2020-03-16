@@ -302,8 +302,6 @@ async function deploy() {
         return path + '/' + lambda.value
     });
 
-    _ui.colorLog(`Paths ${JSON.stringify(paths)}`, _ui.COLORS.BOLD);
-
     const confirmed = await _ui.createRadioButton(`\nDeploying ${lambdas.length} function(s) [${strLambdas}]  \nCool?`, [_k.YES, _k.NO]);
 
     if (confirmed.value === _k.NO) {
