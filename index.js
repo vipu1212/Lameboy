@@ -256,7 +256,8 @@ async function deploy() {
         if (isLambdaPath) {
 
             const dirs = path.split('/');
-            const lambdaName = dirs[dirs.length - 1];
+            const lambdaName = dirs.splice(-1);
+            path = dirs.join('/');
 
             lambdas.push({
                 value: lambdaName
@@ -269,8 +270,6 @@ async function deploy() {
                 if (fs.lstatSync(entryPath).isDirectory())
                     return fs.lstatSync(entryPath).isDirectory() && fs.readdirSync(entryPath).indexOf(_k.LAME_CONFIG_FILE_NAME) >= 0;
             });
-
-            console.log(`entries ${JSON.stringify(entries)}`);
 
             if (entries.length === 0) {
                 _ui.colorLog('No Lambdas found! Initialize first to deploy.')
@@ -302,6 +301,8 @@ async function deploy() {
 
         return path + '/' + lambda.value
     });
+
+    _ui.colorLog(`Paths ${JSON.stringify(paths)}`, _ui.COLORS.BOLD);
 
     const confirmed = await _ui.createRadioButton(`\nDeploying ${lambdas.length} function(s) [${strLambdas}]  \nCool?`, [_k.YES, _k.NO]);
 
