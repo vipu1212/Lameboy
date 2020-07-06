@@ -1,6 +1,6 @@
 {
   "name": "lameboy",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "AWS Lambda functions Deployment Interactive Tool. So very beta (╯°□°）╯︵ ┻━┻",
   "main": "index.js",
   "scripts": {
@@ -26,5 +26,6 @@
   "repository": {
     "type" : "git",
     "url" : "https://github.com/vipu1212/Lameboy"
-  }
+  },
+  "publishConfig": { "registry": "https://npm.pkg.github.com/" }
 }
