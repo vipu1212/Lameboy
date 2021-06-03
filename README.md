@@ -1,3 +1,5 @@
+![](https://img.shields.io/badge/OS-Linux%20%7C%20Mac-green)
+
 # LameBoy (Beta)
 ![Lameboy](https://i.ibb.co/2KGbVHx/lame.png)
 
